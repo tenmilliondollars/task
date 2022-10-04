@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment # объявляем абстракцию
+metadata:
+  name: app-deployment
+  labels:
+    app: deploy # прописываем лейбл
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: deploy # указываем селектор для сервиса, по заданию не предусматривается, но полагаю, что должен быть
+  template:
+    metadata:
+      labels:
+        app: deploy 
+    spec:
+      affinity:
+        podAntiAffinity: # Гуглим "Kubernetes pods on different nodes". Cамое простое раскинуть через под антиаффинити, есть ещё nodename, но их мы не знаем. раскидываем по хостнеймам туда, где таких подов ещё нет
+          preferredDuringSchedulingIgnoredDuringExecution: # ставим preferred, т.к. с required при кол-ве подов меньше нод поды не запустятся.
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - deploy
+            topologyKey: "kubernetes.io/hostname"
+      containers: # объявляем наш под
+      - name: pod
+        image: mysql:8.0.19
+        resources: # обозначаем лимиты в соответсвие с заданием memory не меняется, а в лимитах цпу без необходимости не меньше 1000, т.к. это можеть вызвать проблемы.
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "1000m"
+        startupProbe: # Далее идём гуглим "Kubernetes wait pod for startup", читаем доку. Приложению нужно время на инициализацию возьмём инита 10 секунд и период 1, таким образом 10*1=10 секунд ожидания.
+          initialDelaySeconds: 10
+          periodSeconds: 1
+          exec: # здесь можем показать условия проверки, можно TCP, gRPC, HTTP, exec. Я выбрал exec как пример
+            command:
+            - ls
+            - /var/lib/mysql
+        livenessProbe: # указываем ливнес пробу
+          exec:
+            command:
+            - ls
+            - /var/lib/mysql
+          initialDelaySeconds: 10
+          periodSeconds: 1
+        readinessProbe: # указываем рэдинес пробу
+          exec:
+            command:
+            - ls
+            - /var/lib/mysql
+          initialDelaySeconds: 10
+          periodSeconds: 1

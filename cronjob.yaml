@@ -1,0 +1,49 @@
+# Джоб на скейлап
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: scale-up-job
+  namespace: default
+spec:
+  schedule: "0 14 * * *" # Взял рандомное дневное время 2 часа дня
+  successfulJobsHistoryLimit: 0 # успешные логи нам не нужны
+  failedJobsHistoryLimit: 2 # зафейлиные нужны для сравнения и фикса ошибок, с запасом 2 штуки
+  concurrencyPolicy: Forbid # параллельно их не запускаем
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: sa-cron-runner
+          containers:
+          - name: scale-up-job
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - kubectl patch hpa app-hpa --patch '{"spec":{"minReplicas":4}}'
+          restartPolicy: OnFailure # рестартим при фейле
+----
+# Джоб на скейлдаун
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: scale-down-job
+  namespace: default
+spec:
+  schedule: "0 0 * * *" # взял рандомное ночное время полночь.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 0
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: sa-cron-runner
+          containers:
+          - name: scale-down-job
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - kubectl patch hpa app-hpa --patch '{"spec":{"minReplicas":2}}'
+          restartPolicy: OnFailure
